@@ -1,5 +1,4 @@
 #include "sql.h"
-#include "qsqldbhelper.h"
 #include "Actor.h"
 #include "Scene.h"
 #include "sqlconnection.h"
@@ -14,11 +13,10 @@
 #include <QString>
 #include <QVector>
 #include <QRegularExpression>
-
-SQL::SQL(){
+SQL::SQL(QString name){
     // Start Postgresql
     startPostgres();
-    this->connectionName = connectionName;
+    this->connectionName = name;
 }
 
 void SQL::startPostgres(){
@@ -40,12 +38,15 @@ SQL::~SQL(){}
 
 
 // Check if a record exists in the database
-bool SQL::hasMatch(QSqlQuery *q){   return (countMatches(q) > 0);   }
+bool SQL::hasMatch(QueryPtr q){
+    this->connection = sqlConnection(q);
+    return (connection.count() > 0);
+}
 
 
 // Use a Query String and a Parameter List to assemble a QSqlQuery object.
-QSharedPointer<QSqlQuery> SQL::assembleQuery(QString s, QStringList args, bool &ok){
-    QSharedPointer<QSqlQuery> query = QSharedPointer<QSqlQuery>(new QSqlQuery(db));
+QueryPtr SQL::assembleQuery(QString s, QStringList args, bool &ok){
+    QueryPtr query = QueryPtr(new QSqlQuery(db));
     query->setForwardOnly(true);
     ok = query->prepare(s);
     if (!ok){
@@ -60,15 +61,14 @@ QSharedPointer<QSqlQuery> SQL::assembleQuery(QString s, QStringList args, bool &
     return query;
 }
 
-
-
-
 /*------------------------------------------------------------------
  * Clear unused items out of the table.
  *------------------------------------------------------------------*/
 void SQL::purgeScenes(void){
-    QSqlDBHelper sql;
-    if (!sql.connect(HOST, SCENE_DB, USERNAME, PASSWORD)){
+    sqlConnection sql;
+    bool ok = false;
+    sql.startConnection(ok);
+    if (ok){
         qWarning("Unable to Connect to database - Cannot Purge Scenes");
     } else {
         QSqlTableModel model;
@@ -107,10 +107,32 @@ void SQL::loadSceneList(SceneList &scenes){
 }
 
 void SQL::loadActorList(QVector<QSharedPointer<Actor>> &actors){
-    sqlConnection connection(HOST, USERNAME, PASSWORD, "actors", "Actors");
-    connection.connect();
+    sqlConnection c();
+    c.connect();
+    QueryPtr q = c.newQuery();
+    QString queryText = "SELECT * FROM actors";
+    if (!q->prepare(queryText)){
+        qWarning("Unable to prepare query '%s': ", qPrintable(queryText), qPrintable(q->lastError().text()));
+        return;
+    } else if (q->exec()){
+        int index = 0;
+        emit startProgress(q->size());
+        while(q->nextResult()){
+            emit updateProgress(++index);
+            q->next();
+            ActorPtr a = ActorPtr(new Actor(q->record().value("name").toString()));
+            if (!actors.contains(a)){
+                a = ActorPtr(new Actor(q->record()));
+                actors.push_back(a);
+            }
+        }
+        emit closeProgress();
+    } else {
+        qWarning("Error Running Query %s: %s", qPrintable(queryText), qPrintable(q->lastError().text()));
+    }
+    c.disconnect();
     // Set up the Table Model
-
+    /*
     QSqlQueryModel model;
     model.setQuery("SELECT * FROM actors");
     for (int i = 0; i < model.rowCount(); ++i){
@@ -121,6 +143,7 @@ void SQL::loadActorList(QVector<QSharedPointer<Actor>> &actors){
         }
     }
     sql.disconnect();
+    */
 }
 
 /*------------------------------------------------------------------
@@ -152,7 +175,7 @@ bool SQL::sceneSql(QSharedPointer<Scene> S, queryType type){
         // Run Query
         bool error = false, ok = false;
         db.transaction();
-        QSharedPointer<QSqlQuery> q = assembleQuery(queryString, queryArgs, ok);
+        QueryPtr q = assembleQuery(queryString, queryArgs, ok);
         if (ok){
             if (q->exec()){
                 qDebug("Committing Query");
@@ -200,7 +223,7 @@ bool SQL::actorSql(QSharedPointer<Actor> A, queryType type){
         // Run Query
         bool ok = false, error = false;
         db.transaction();
-        QSharedPointer<QSqlQuery> q = assembleQuery(queryString, queryArgs, ok);
+        QueryPtr q = assembleQuery(queryString, queryArgs, ok);
         if (ok){
             if (q->exec()){
                 if (db.commit()){
@@ -233,7 +256,9 @@ bool SQL::hasScene(ScenePtr s, bool &queryRan){
 
 bool SQL::hasActor(ActorPtr a, bool &queryRan){
     bool success = false;
-    QSqlQuery query(db);
+    sqlConnection sql;
+    DatabasePtr database = sql.startConnection();
+    QSqlQuery query(*(database.data()));
     if (query.exec(QString("SELECT FROM ACTORS WHERE (NAME LIKE %1)").arg(a->getName()))){
         queryRan = true;
         success = (query.size() > 0);
@@ -312,21 +337,8 @@ void SQL::updateDatabase(QVector<QSharedPointer<Scene>> sceneList){
     qDebug("\n\nAdded %d new Scenes.\nUpdated %d Existing Records.\n%d/%d Records from list used to modify table.\n", count.added, count.updated, count.total(), sceneList.size());
 }
 
-
-// Run a SELECT query and count the number of records that match.
-int SQL::countMatches(QSqlQuery *q){
-    int matches = 0;
-    if (!connect()){
-        return 0;
-    } else {
-        q->exec();
-        matches = q->size();
-    }
-    return matches;
-}
-
 // Run an SQL_UPDATE or SQL_INSERT query on the database
-bool SQL::modifyDatabase(QSqlQuery *q){
+bool SQL::modifyDatabase(QueryPtr q){
     bool result = false;
     if (!db.isValid()){
         qCritical("Database %s is not valid. Cannot Run Query.", qPrintable(db.databaseName()));
@@ -347,9 +359,9 @@ bool SQL::modifyDatabase(QSqlQuery *q){
     return result;
 }
 
-QSharedPointer<QSqlQuery> SQL::queryDatabase(QString s, QStringList a){
+QueryPtr SQL::queryDatabase(QString s, QStringList a){
     bool ok = false;
-    QSharedPointer<QSqlQuery> q= assembleQuery(s, a, ok);
+    QueryPtr q= assembleQuery(s, a, ok);
     if (ok && q->exec()){
         qDebug("Successfully ran query");
     } else {
@@ -432,7 +444,7 @@ const char *toString(queryType q){
         return "Update";
     else if (q == SQL_INSERT)
         return "Add";
-    else if (q == SQL_REQUEST)
+    else if (q == SQL_SELECT)
         return "Get";
     else
         return "???";

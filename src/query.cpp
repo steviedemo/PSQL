@@ -1,7 +1,4 @@
 #include "Query.h"
-#include "Height.h"
-#include "FilePath.h"
-#include "Rating.h"
 #include <QDate>
 #include <QDateTime>
 #include <QString>
@@ -10,9 +7,88 @@ Query::Query(QString query_text):
     queryString(query_text){
 }
 
+Query::~Query(){}
+void Query::setTable(QString table){
+    this->tableName = table;
+}
+QString Query::getTable() const {   return tableName;       }
+QMap    Query::getData()  const {   return data;            }
+bool    Query::mapEmpty() const {   return data.isEmpty();  }
+bool Query::isEmpty() const{
+    bool empty = true;
+    if (!data.isEmpty()){
+        empty = false;
+    } else if (!criteria.isEmpty()) {
+        empty = false;
+    } else if (!queryString.isEmpty()){
+        empty = false;
+    }
+    return empty;
+}
 
-QSqlQuery *Query::toSelectQuery(QString query, QSqlDatabase db, bool &ok){
-    QSqlQuery *q = new QSqlQuery(db);
+QueryPtr Query::verifyData(DatabasePtr db){
+    QueryPtr q = QSharedPointer<QSqlQuery>(0);
+    if (!this->isEmpty()){
+        qWarning("Error creating QSqlQuery object - Query object is Empty!");
+    } else {
+        q = QueryPtr(new QSqlQuery(*(db.data())));
+        q->setForwardOnly(true);
+    }
+    return q;
+}
+
+QueryPtr Query::toSqlQuery(queryType type, DatabasePtr db, bool &ok){
+    QueryPtr q;
+    if (type == SQL_INSERT){
+        q = this->toInsertQuery(db, ok);
+    } else if (type == SQL_UPDATE){
+        q = this->toUpdateQuery(db, ok);
+    } else {
+        q = this->toSelectQuery(db, ok);
+    }
+    return q;
+}
+
+QueryPtr Query::toSelectQuery(DatabasePtr db, bool &ok){
+    QueryPtr q = verifyData(db);
+    QStringList parameters;
+    ok = !q.isNull();
+    if (!ok) {  return q;   }
+    /// Set up Query String
+    this->queryString = "SELECT ";
+    QMapIterator<QString, QString> it(data);
+    while(it.hasNext()){
+        it.next();
+        queryString += it.key() + (it.hasNext() ? ", " : "");
+    }
+    this->queryString.append(" FROM " + this->tableName);
+    if (!criteria.isEmpty()){
+        this->queryString.append(" WHERE ");
+        it = criteria;
+        while(it.hasNext()){
+            it.next();
+            this->queryString += QString("%1 = ?").arg(it.key());
+            parameters << it.value();
+            if (it.hasNext()){
+                this->queryString.append(" AND ");
+            }
+        }
+    }
+    /// Set up QueryPointer Object
+    if (!q->prepare(queryString)){
+        qWarning("Error Preparing Query: '%s'", qPrintable(queryString));
+        return q;
+    } else {
+        foreach(QString param, parameters){
+            q->addBindValue(param);
+        }
+        qDebug("Successfully Prepared Query: '%s'", qPrintable(queryString));
+    }
+    return q;
+}
+
+QueryPtr Query::toSelectQuery(QString query, QSqlDatabase db, bool &ok){
+    QueryPtr q = QSharedPointer<QSqlQuery>(new QSqlQuery(db));
     q->setForwardOnly(true);
     ok = q->prepare(query);
     if (!ok){
@@ -21,26 +97,26 @@ QSqlQuery *Query::toSelectQuery(QString query, QSqlDatabase db, bool &ok){
     return q;
 }
 
-QSqlQuery *Query::toUpdateQuery(QString tableName, QSqlDatabase db, bool &ok){
-    QSqlQuery *q = new QSqlQuery(db);
+QueryPtr Query::toUpdateQuery(QSqlDatabase db, bool &ok){
+    QueryPtr q = verifyData(db);
+    QStringList parameters;
+    ok = !q.isNull();
+    if (!ok) {  return q;   }
+
     QString fields(""), values(""), whereString("");
     QStringList args;
-    QMapIterator<QString, QString> dataIt(data);
-    while(dataIt.hasNext()){
-        dataIt.next();
-        fields.append(dataIt.key());
-        values.append("?");
-        if (dataIt.hasNext()){
-            fields.append(", ");
-            values.append(", ");
-        }
-        args << dataIt.value();
+    QMapIterator<QString, QString> it(data);
+    while(it.hasNext()){
+        it.next();
+        fields += it.key() + (it.hasNext() ? ", " : "");
+        values += "?" + (it.hasNext()) ? ", " : "";
+        args << it.value();
     }
-    QMapIterator<QString,QString> whereIt(criteria);
-    while(whereIt.hasNext()){
-        whereString.append(QString("%1 = ?").arg(whereIt.key()));
-        args << whereIt.value();
-        if (whereIt.hasNext()){
+    it = criteria;
+    while(it.hasNext()){
+        whereString.append(QString("%1 = ?").arg(it.key()));
+        args << it.value();
+        if (it.hasNext()){
             whereString.append(" AND ");
         }
     }
@@ -54,11 +130,13 @@ QSqlQuery *Query::toUpdateQuery(QString tableName, QSqlDatabase db, bool &ok){
             q->addBindValue(arg);
         }
     }
-
+    return q;
 }
 
-QSqlQuery *Query::toInsertQuery(QString tableName, QSqlDatabase db, bool &ok){
-    QSqlQuery *q = new QSqlQuery(db);
+QueryPtr Query::toInsertQuery(DatabasePtr db, bool &ok){
+    QueryPtr q = verifyData(db);
+    ok = !q.isNull();
+    if (!ok) {  return q;   }
     QString fields(""), values("");
     QMapIterator<QString, QString>it(data);
     int idx = 0;
@@ -78,7 +156,7 @@ QSqlQuery *Query::toInsertQuery(QString tableName, QSqlDatabase db, bool &ok){
         ok = false;
         return q;
     } else {
-        QMapIterator<QString, QString> valIt(data);
+        it = data;
         while(it.hasNext()){
             it.next();
             q->addBindValue(it.value());
@@ -92,68 +170,44 @@ void Query::add(QString key){
     data.insert(key, "");
 }
 
-void Query::add(QString key, double value)      {   data.insert(key, sqlSafe(value));   }
-void Query::add(QString key, int value)         {   data.insert(key, sqlSafe(value));   }
-void Query::add(QString key, QString value)     {   data.insert(key, sqlSafe(value));   }
-void Query::add(QString key, QDate value)       {   data.insert(key, sqlSafe(value));   }
-void Query::add(QString key, QDateTime value)   {   data.insert(key, sqlSafe(value));   }
-void Query::add(QString key, FilePath value)    {   data.insert(key, sqlSafe(value));   }
-void Query::add(QString key, Height value)      {   data.insert(key, sqlSafe(value.toString());  }
-void Query::add(QString key, Rating value)      {   data.insert(key, sqlSafe(value.toString())); }
+
+void Query::add(QString key, double value)              {   data.insert(key, sqlSafe(value));   }
+void Query::add(QString key, int value)                 {   data.insert(key, sqlSafe(value));   }
+void Query::add(QString key, QString value)             {   data.insert(key, sqlSafe(value));   }
+void Query::add(QString key, QDate value)               {   data.insert(key, sqlSafe(value));   }
+void Query::add(QString key, QDateTime value)           {   data.insert(key, sqlSafe(value));   }
 void Query::addCriteria(QString key, double value)      {   criteria.insert(key, sqlSafe(value));   }
 void Query::addCriteria(QString key, int value)         {   criteria.insert(key, sqlSafe(value));   }
 void Query::addCriteria(QString key, QString value)     {   criteria.insert(key, sqlSafe(value));   }
 void Query::addCriteria(QString key, QDate value)       {   criteria.insert(key, sqlSafe(value));   }
 void Query::addCriteria(QString key, QDateTime value)   {   criteria.insert(key, sqlSafe(value));   }
-void Query::addCriteria(QString key, Height value)      {   criteria.insert(key, value.sqlSafe());  }
-void Query::addCriteria(QString key, FilePath value)    {   criteria.insert(key, sqlSafe(value));   }
 
-
-QString Query::sqlSafe(QDateTime d){
-    QString s("");
-    if (valid(d)){
-        s=d.toString("'yyyy-MM-dd'");
-    }
-    return s;
-}
-
-QString Query::sqlSafe(QDate d)    {
+QString Query::sqlSafe  (int i)         {   return QString("%1").arg(i);        }
+QString Query::sqlSafe  (double d)      {   return QString::number(d, 'f', 2);  }
+QString Query::sqlSafe  (QDateTime d)   {   return sqlSafe(d.date());           }
+QString Query::sqlSafe  (QDate d)    {
     QString s("");
     if (d.isValid() && !d.isNull())
         s=d.toString("'yyyy-MM-dd'");
     return s;
 }
 
-QString Query::sqlSafe(FilePath f){
-    return sqlSafe(f.absolutePath());
-}
-
 QString Query::sqlSafe(QString s){
-    QString sql("");
-    if (s.isEmpty())
-        return sql;
-    int f_offset = 0, b_offset = 0;
-    sql.append("'");
+    // Any apostrophe needs to be escaped with a second apostrophe. Semicolons and Quotation marks must be removed outright.
+    QString temp = s.replace("'", "''").remove('\"').remove(';');
+    // Remove any starting/ending apostrophes.
     try{
-        if (s.startsWith("'"))  {   f_offset = 1;   }
-        if (s.endsWith("'"))    {   b_offset = 1;   }
-        for (int i = 0; i < s.size(); ++i){
-            QChar c = s.at(i);
-            if (c == '\'')                    // escape apostrophes
-                sql.append("''");
-            else if (c != '\"' && c != ';') // don't include semicolons or quotation marks
-                sql.append(c);
-         }
-         int lastPosition = sql.size() - 1;
-         while(sql.at(lastPosition) == '\''){
-            sql.remove(lastPosition);
-            lastPosition = sql.size() - 1;
-         }
+        while(temp.startsWith("'")){
+            temp = temp.remove(0, 1);
+        }
+        while(temp.endsWith("'")){
+            int lastIndex = temp.size() - 1;
+            temp = temp.remove(lastIndex, 1);
+        }
     } catch (std::exception &e) {
-        qDebug("Caught Exception While Creating Sql Safe String from '%s':\t%s", qPrintable(s), e.what());
+        qWarning("Caught Exception While Creating Sql Safe String from '%s':\t%s", qPrintable(temp), e.what());
     } catch (...) {
-        qDebug("Caught Unknown Exception while creating SQL safe string from '%s'", qPrintable(s));
+        qWarning("Caught Unknown Exception while creating SQL safe string from '%s'", qPrintable(temp));
     }
-    sql.append("'");
-    return sql;
+    return QString("'%1'").arg(temp);
 }

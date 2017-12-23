@@ -1,5 +1,9 @@
 #ifndef SQL_H
 #define SQL_H
+#include "definitions.h"
+#include "sql_definitions.h"
+#include "FilePath.h"
+#include "sqlconnection.h"
 #include <QMutex>
 #include <QtSql>
 #include <QSqlQuery>
@@ -8,11 +12,10 @@
 #include <QString>
 #include <QStringList>
 #include <QSharedPointer>
-#include "definitions.h"
-#include "FilePath.h"
 #include <QMap>
 
 
+#define DEFAULT_NAME "default"
 struct operation_count {
     int idx, added, updated;
     operation_count() :
@@ -37,21 +40,20 @@ struct operation_count {
 class SQL : public QObject {
     Q_OBJECT
 public:
-    SQL();
+    SQL(QString connectionName=DEFAULT_NAME);
     ~SQL();
     static void purgeScenes(void);
-    int  countMatches   (QSqlQuery *q);
-    bool hasMatch       (QSqlQuery *q);
+    bool hasMatch       (QueryPtr q);
     bool hasScene       (ScenePtr s, bool &queryRan);
     bool hasActor       (ActorPtr a, bool &queryRan);
     bool insertOrUpdateActor(ActorPtr);
     bool insertOrUpdateScene(ScenePtr);
-    bool modifyDatabase (QSqlQuery *q);
-    QSharedPointer<QSqlQuery> queryDatabase(QString queryText, QStringList args);
-    QSharedPointer<QSqlQuery> assembleQuery(QString queryText, QStringList args, bool &ok);
+    bool modifyDatabase (QueryPtr q);
+    QueryPtr queryDatabase(QString queryText, QStringList args);
+    QueryPtr assembleQuery(QString queryText, QStringList args, bool &ok);
 
-    void updateDatabase (QVector<QSharedPointer<class Actor>> actorList);
-    void updateDatabase (QVector<QSharedPointer<class Scene>> sceneList);
+    void updateDatabase (ActorList actorList);
+    void updateDatabase (SceneList sceneList);
     bool makeTable      (Database::Table);
     bool dropTable      (Database::Table);
     bool sceneSql(ScenePtr S, queryType type);
@@ -67,6 +69,7 @@ private:
     operation_count count;
     QSqlDatabase db;
     QString connectionName;
+    sqlConnection connection;
     QMutex mx;
     void startPostgres();
 signals:
@@ -75,72 +78,5 @@ signals:
     void closeProgress();
 };
 
-
-
-#define ADB_TABLE 	"CREATE TABLE IF NOT EXISTS ACTORS("\
-                    "ID				smallserial 	primary key,"\
-                    "NAME 			text 			unique not null,"\
-                    "ALIASES		text,"\
-                    "BIRTHDAY		date,"\
-                    "CITY			text,"\
-                    "COUNTRY		text,"\
-                    "ETHNICITY		text,"\
-                    "HEIGHT			integer,"\
-                    "WEIGHT			integer,"\
-                    "MEASUREMENTS	text,"\
-                    "HAIR			text,"\
-                    "EYES			text,"\
-                    "TATTOOS		text,"\
-                    "PIERCINGS		text,"\
-                    "PHOTO			text)"
-#define SDB_TABLE	"CREATE TABLE IF NOT EXISTS SCENES("\
-                    "ID				serial			primary key,"\
-                    "FILENAME		text			not null,"\
-                    "FILEPATH		text			not null,"\
-                    "TITLE			text,"\
-                    "COMPANY		text,"\
-                    "SERIES			text,"\
-                    "SCENE_NO		integer,"\
-                    "RATING			text,"\
-                    "SIZE			float8,"\
-                    "LENGTH			float8,"\
-                    "WIDTH			integer,"\
-                    "HEIGHT			integer,"\
-                    "ADDED			date,"\
-                    "CREATED		date,"\
-                    "ACCESSED		date,"\
-                    "ACTOR1			text,"\
-                    "AGE1			integer,"\
-                    "ACTOR2			text,"\
-                    "AGE2			integer,"\
-                    "ACTOR3			text,"\
-                    "AGE3			integer,"\
-                    "ACTOR4			text,"\
-                    "AGE4			integer,"\
-                    "URL			text,"\
-                    "TAGS			text)"
-// Store entries from online filmographies
-#define FDB_TABLE	"create table if not exists filmographies("\
-                    "ID				serial			primary key,"\
-                    "actor			text			not null,"\
-                    "title			text			not null,"\
-                    "company		text			not null,"\
-                    "year			integer			not null,"\
-                    "scene			integer,"\
-                    "tags			text)"
-#define THUMBNAIL_DB	"create table if not exists thumbnails("\
-                    "ID 			serial 			primary key,"\
-                    "SCENEID 		integer			not null,"\
-                    "FILENAME		text			not null,"\
-                    "DATEADDED		text,"\
-                    "SCENEPATH		text,"\
-                    "SCENEFILE 		text,"\
-                    "IMAGE			OID)"
-#define HEADSHOT_DB	"create table if not exists thumbnails("\
-                    "ID 			serial 		primary key,"\
-                    "FILENAME		text			not null,"\
-                    "DATEADDED		text,"\
-                    "NAME 			text,"\
-                    "IMAGE			bytes)"
 
 #endif // SQL_H
