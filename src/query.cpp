@@ -151,7 +151,10 @@ std::string Query::toPqxxUpdate(QString table){
             }
         }
     } else if (data.contains("NAME")){
-        whereString = QString("NAME = %1").arg(data.value("NAME"));
+        QString name = data.value("NAME");
+        if (!name.startsWith('\'')) {   name.prepend('\''); }
+        if (!name.endsWith('\''))   {   name.append('\'');  }
+        whereString = QString("NAME = %1").arg(name);
     } else {
         qWarning("Error Making update SQL Statement - No Criteria provided.");
     }
@@ -257,7 +260,10 @@ QueryPtr Query::toUpdateQuery(DatabasePtr db, bool &ok){
             }
         }
     } else if (data.contains("NAME")){
-        whereString = QString("NAME = %1").arg(data.value("NAME"));
+        QString name = data.value("NAME");
+        if (!name.startsWith('\'')) {   name.prepend('\''); }
+        if (!name.endsWith('\''))   {   name.append('\'');  }
+        whereString = QString("NAME = %1").arg(name);
     }
     QString text = QString("UPDATE %1 SET (%2) = (%3) WHERE %4;").arg(tableName).arg(fields).arg(values).arg(whereString);
     ok = q->prepare(text);
@@ -384,5 +390,7 @@ QString Query::sqlSafe(QString s){
     } catch (...) {
         qWarning("Caught Unknown Exception while creating SQL safe string from '%s'", qPrintable(temp));
     }
-    return QString("'%1'").arg(temp);
+    temp.prepend("'");
+    temp.append("'");
+    return temp;
 }
