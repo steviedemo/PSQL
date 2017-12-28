@@ -4,30 +4,42 @@
 #include "query.h"
 #include <QString>
 #include <QSqlDatabase>
+#include <pqxx/pqxx>
+#include <string>
 #define DEFAULT_NAME "default"
 class sqlConnection
 {
 public:
-    sqlConnection(QString connectionName=DEFAULT_NAME);
-    sqlConnection(QueryPtr);
-    sqlConnection(QString host, QString username, QString password, QString databaseName, QString connectionName="default");
+    sqlConnection(std::string sqlStatement="");
+    sqlConnection(const QString sqlStatement);
+ //   sqlConnection(QueryPtr);
+    sqlConnection(Query, queryType);
+
     ~sqlConnection();
-    DatabasePtr startConnection();
-    DatabasePtr startConnection(bool &ok);
     void        disconnect();
-    bool        setQuery(Query,     queryType);
-    bool        setQuery(QueryPtr);
-    QueryPtr    getQueryPointer(void);
-    DatabasePtr getDatabase(void);
-    bool        execute (QueryPtr );
-    QueryPtr    execute (bool &ok);
-    int         count   ();
-    QueryPtr    newQuery(bool forwardOnly=true);
+    void        clear();
+    void        setQuery(Query,     queryType);
+    void        setQuery(const std::string text);
+    void        setQuery(const QString s) { setQuery(s.toStdString()); }
+    QString     getQuery(void);
+    bool        execute ();
+    bool        execute (std::string sqlStatement);
+    pqxx::result getResult();
+    int         countResults();
+    bool        foundMatch();
+    bool        isConnected();
 private:
+    void setup();
+    bool verify(QueryPtr);
+    bool verify();
     QString host, username, password, dbName, name;
-    DatabasePtr db;
+    std::string query_string;
+    std::string credentialString;
     Query       query;
-    QueryPtr    queryPointer;
+
+    pqxx::connection *databaseConnection;
+    pqxx::result lastResult;
+
 };
 
 #endif // SQLCONNECTION_H

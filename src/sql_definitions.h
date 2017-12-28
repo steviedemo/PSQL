@@ -1,14 +1,16 @@
 #ifndef SQL_DEFINITIONS_H
 #define SQL_DEFINITIONS_H
 #include <QSharedPointer>
-#define HOST        "localhost"
-#define USERNAME    "scenequery"
+#include <pqxx/pqxx>
+
+#define HOST        "127.0.0.1"
+#define USERNAME    "derby"
 #define PASSWORD    "smashed"
 #define SCENE_DB    "scenes"
 #define ACTOR_DB    "actors"
-#define DB_NAME     "scenequery"
-
-
+#define DB_NAME     "derby"
+typedef pqxx::result::const_iterator ResultIterator;
+typedef pqxx::result                 Result;
 typedef QSharedPointer<class QSqlQuery>     QueryPtr;
 typedef QSharedPointer<class QSqlDatabase>  DatabasePtr;
 namespace Database{

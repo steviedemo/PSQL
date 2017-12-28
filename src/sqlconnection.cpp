@@ -6,124 +6,134 @@
 #include <QSqlRecord>
 #include <QSqlError>
 #include <QTextStream>
-sqlConnection::sqlConnection(QString connectionName):
-    host(HOST), username(USERNAME), password(PASSWORD), dbName(DB_NAME), name(connectionName){
-    this->db = DatabasePtr(new QSqlDatabase(QSqlDatabase::addDatabase("QPSQL", name)));
+#include <pqxx/pqxx>
+#include <pqxx/connection.hxx>
+#include <pqxx/result.hxx>
+#include <pqxx/tablereader.hxx>
+using namespace pqxx;
+sqlConnection::sqlConnection(std::string sqlStatement):
+    host(HOST), username(USERNAME), password(PASSWORD), dbName(DB_NAME), name(DEFAULT_NAME), query_string(sqlStatement){
+    setup();
 }
-sqlConnection::sqlConnection(QueryPtr q):
-    host(HOST), username(USERNAME), password(PASSWORD), dbName(DB_NAME), name(connectionName){
-    this->db = DatabasePtr(new QSqlDatabase(QSqlDatabase::addDatabase("QPSQL", name)));
-    this->setQuery(q);
+sqlConnection::sqlConnection(const QString sqlStatement):
+    host(HOST), username(USERNAME), password(PASSWORD), dbName(DB_NAME), name(DEFAULT_NAME), query_string(sqlStatement.toStdString()){
+    setup();
 }
+sqlConnection::sqlConnection(Query query, queryType type) :
+    host(HOST), username(USERNAME), password(PASSWORD), dbName(DB_NAME), name(DEFAULT_NAME), query_string(""){
+    setup();
+    this->setQuery(query, type);
+}
+//sqlConnection::sqlConnection(QueryPtr q): host(HOST), username(USERNAME), password(PASSWORD), dbName(DB_NAME), name(DEFAULT_NAME), open(false){
+//    setup();
+//    this->setQuery(q);
+//}
 
-sqlConnection::sqlConnection(QString host, QString username, QString password, QString connectionName):
-    host(host), username(username), password(password), dbName(DB_NAME), name(connectionName){
-    this->db = QSharedPointer<QSqlDatabase>(new QSqlDatabase(QSqlDatabase::addDatabase("QPSQL", connectionName)));
+void sqlConnection::setup(){
+    this->lastResult = pqxx::result();
+    this->credentialString = QString("dbname=%1 user=%2 password=%3 hostaddr=%4 port=5432").arg(dbName).arg(username).arg(password).arg(host).toStdString();
+    this->databaseConnection = new pqxx::connection(credentialString);
+    if (!databaseConnection->is_open()){
+        qWarning("Error Opening Database Connection");
+        return;
+    }
 }
 sqlConnection::~sqlConnection(){
-    if (db->isOpen()){
-        db->close();
-    }
-    delete db;
+    this->databaseConnection->disconnect();
+    this->databaseConnection->deactivate();
+    delete databaseConnection;
 }
+
+/** \brief Check if any records were returned from the last query ran. */
+bool sqlConnection::foundMatch(){
+    return (countResults() > 0);
+}
+
+/** \brief Clear stored data pertaining to the last run query*/
+void sqlConnection::clear(){
+    this->lastResult = pqxx::result();
+    this->query.clear();
+    this->query_string.clear();
+}
+
+/** \brief Close the database Connection */
 void sqlConnection::disconnect(){
-    db->close();
+    databaseConnection->disconnect();
+}
+/** \brief Set the SQL Statement that will be run when 'execute' is called. */
+void sqlConnection::setQuery(const std::string query_text){
+    this->query_string = query_text;
+}
+/** \brief Use a Query Object & queryType Enum to set up the SQL statement that will be run
+ *          when 'execute' is called. */
+void sqlConnection::setQuery(Query q, queryType type){
+    this->query = q;
+    this->query_string = q.toPqxxQuery(type);
+}
+/** \brief Return the sql statement that is currently stored */
+QString sqlConnection::getQuery(){
+    return this->query_string.c_str();
+}
+/** \brief Check if the database connection is still active. */
+bool sqlConnection::isConnected(){
+    return this->databaseConnection->is_open();
 }
 
-DatabasePtr sqlConnection::startConnection(bool &ok){
-    db->setConnectOptions();
-    db->setHostName(host);
-    db->setDatabaseName(dbName);
-    db->setUserName(username);
-    db->setPassword(password);
-    if (!db->isValid()){
-        qWarning("Error: Database is invalid!");
-        ok = false;
-        return NULL;
-    } else if (db->open){
-        ok = true;
-        return db;
-    }
-    ok = false;
-    qWarning("Error Connecting to database");
-    return NULL;
-}
-
-DatabasePtr sqlConnection::startConnection(){
-    bool ok = false;
-    return startConnection(ok);
-}
-DatabasePtr sqlConnection::getDatabase()    {   return db;  }
-QueryPtr sqlConnection::newQuery(bool forwardOnly){
-    QueryPtr query = QSharedPointer<QSqlQuery>(new QSqlQuery(*(db.data())));
-    query->setForwardOnly(forwardOnly);
-    return query;
-}
-
-bool sqlConnection::setQuery(Query q, queryType type){
+/** \brief Check that the query is not empty and the conneciton has been established. */
+bool sqlConnection::verify(){
     bool success = false;
-    this->query = query;
-    this->queryPointer = q.toSqlQuery(type, db, success);
+    if (query_string.empty()){
+        qWarning("Cannot Run Empty Query");
+    } else if (!databaseConnection->is_open()){
+        qDebug("Connection Not Open. Attemting to Activate Connection...");
+        databaseConnection->activate();
+        if (databaseConnection->is_open()){
+            qDebug("Success!");
+            success = true;
+        }  else {
+            qWarning("Failed to activate the connection.");
+        }
+    } else {
+        success = true;
+        qDebug("pqxx connection okay.");
+    }
     return success;
 }
 
-bool sqlConnection::setQuery(QueryPtr q)    {   this->queryPointer = q;     }
-QueryPtr sqlConnection::getQueryPointer()   {   return this->queryPointer;  }
 
-
-/** \brief Execute the currently stored query. */
-QueryPtr sqlConnection::execute(bool &ok){
-    ok = execute(this->queryPointer);
-    return queryPointer;
-}
-
-/** \brief Execute the Query passed on the current Database. */
-bool sqlConnection::execute(QueryPtr query){
+/** \brief Execute a PQXX Query that has been previously stored. */
+bool sqlConnection::execute(){
     bool success = false;
-    if (verify(query)){
-        db->transaction();
-        bool result = query->exec();
-        if (query->lastError().type() != QSqlError::NoError || !result){
-            qWarning("Error Executing query: %s", qPrintable(query->lastError().text()));
-            db->rollback();
-        } else {
-            db->commit();
+    if (verify()){
+        try{
+            const char* sql_statement = this->query_string.c_str();
+            nontransaction session(*databaseConnection);
+            this->lastResult = pqxx::result(session.exec(sql_statement));
+            session.commit();
             success = true;
+        } catch (std::exception &e){
+            qWarning("Caught Exception while running query '%s':\n\t%s\n",query_string.c_str(), e.what());
         }
     }
     return success;
 }
 
-/** \brief Check the query and the database to ensure there will not be any fundamental issues
- *          before running the Query.
- */
-bool sqlConnection::verify(QueryPtr query){
-    bool queryOkay = true;
-    QString s("");
-    QTextStream out(&s);
-    if (!query->isValid())
-        out << "QSqlQuery object is invalid!" << endl;
-    if (!db->isValid())
-        out << "Invalid Database '" << db->databaseName() << "'" << endl;
-    if (!db->isOpen())
-        out << "Database " << db->databaseName() << " is not Open!" << endl;
-    if (!s.isEmpty()){
-        qWarning("Unable to run Query, Errors were found:\n%s", qPrintable(s));
-        queryOkay = false;
-    }
-    return queryOkay;
+/** \brief Run the provided SQL Statement on the database */
+bool sqlConnection::execute(std::string sqlStatement){
+    this->query_string = sqlStatement;
+    return execute();
 }
 
+/** \brief Return the result of the last query */
+pqxx::result sqlConnection::getResult(){
+    return this->lastResult;
+}
 
-/** \brief Count the number of rows that the provided SELECT query returns */
-int sqlConnection::count(){
-
-    bool rows = -1;
-    bool ok = queryPointer->exec();
-    if (queryPointer->lastError().type() != QSqlError::NoError || !ok){
-        qWarning("Error Counting matching results: %s", qPrintable(queryPointer->lastError().text()));
-    } else {
-        rows = queryPointer->size();
+/** \brief Return the number of records that was returned by the last query */
+int sqlConnection::countResults(){
+    int records = 0;
+    if (!this->lastResult.empty()){
+        records = (int)lastResult.size();
     }
-    return rows;
+    return records;
 }

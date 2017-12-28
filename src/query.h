@@ -10,41 +10,54 @@ class Query
 public:
     Query(QString query_text="");
     ~Query();
+    void                    clear();
+    void                    setTable    (QString table);
+    QString                 getTable    (void)  const;
+    QMap<QString,QString>   getData     (void)  const;
+    bool                    mapEmpty    (void)  const;
+    bool                    isEmpty     (void)  const;
+    void                    addSelection(QString field);
+    void                    selectAll   (void);
+    void                    setCriteria (QString whereClause);
+    void                    add         (QString key);
+    void                    add         (QString key, double value);
+    void                    add         (QString key, QString value);
+    void                    add         (QString key, int value);
+    void                    add         (QString key, class QDate value);
+    void                    add         (QString key, class QDateTime value);
+    void                    addCriteria (QString key, double value);
+    void                    addCriteria (QString key, QString value);
+    void                    addCriteria (QString key, int value);
+    void                    addCriteria (QString key, class QDate value);
+    void                    addCriteria (QString key, class QDateTime value);
+    void                    addCriteria (QString key, class Height value);
+    QueryPtr                verifyData  (DatabasePtr db);
 
-    void setTable       (QString table);
-    QString getTable    (void)  const;
-    QMap<QString,QString>    getData     (void)  const;
-    bool    mapEmpty    (void)  const;
-    bool    isEmpty     (void)  const;
-    void add            (QString key);
-    void add            (QString key, double value);
-    void add            (QString key, QString value);
-    void add            (QString key, int value);
-    void add            (QString key, class QDate value);
-    void add            (QString key, class QDateTime value);
-    void addCriteria    (QString key, double value);
-    void addCriteria    (QString key, QString value);
-    void addCriteria    (QString key, int value);
-    void addCriteria    (QString key, class QDate value);
-    void addCriteria    (QString key, class QDateTime value);
-    void addCriteria    (QString key, class Height value);
-    QString sqlSafe     (int i);
-    static QString sqlSafe     (double d);
-    static QString sqlSafe     (QString s);
-    static QString sqlSafe     (class QDate);
-    static QString sqlSafe     (class QDateTime d);
-
-    QueryPtr verifyData   (DatabasePtr db);
-    QueryPtr toSqlQuery   (queryType type, DatabasePtr db, bool &ok);
-    QueryPtr toSelectQuery(DatabasePtr db, bool &ok);
-    QueryPtr toInsertQuery(DatabasePtr db, bool &ok);
-    QueryPtr toUpdateQuery(DatabasePtr db, bool &ok);
-
+    QueryPtr                toSqlQuery      (queryType type, DatabasePtr db, bool &ok);
+    QueryPtr                toSelectQuery   (QString, DatabasePtr db, bool &ok);
+    QueryPtr                toSelectQuery   (DatabasePtr db, bool &ok);
+    QueryPtr                toInsertQuery   (DatabasePtr db, bool &ok);
+    QueryPtr                toUpdateQuery   (DatabasePtr db, bool &ok);
+    /// using pqxx class
+    std::string             toPqxxInsert    (QString table="");
+    std::string             toPqxxUpdate    (QString table="");
+    std::string             toPqxxSelect    (QString table="");
+    std::string             toPqxxQuery     (queryType type, QString table="");
+    static QString          sqlSafe     (int i);
+    static QString          sqlSafe     (double d);
+    static QString          sqlSafe     (QString s);
+    static QString          sqlSafe     (class QDate);
+    static QString          sqlSafe     (class QDateTime d);
 
 private:
+    QString                 buildWhereClause();
+
+    void printQuery();
     QMap<QString, QString> data;
     QMap<QString, QString> criteria;
+    QStringList selectFields;
     QString queryString;
+    QString criteriaString;
     QString tableName;
 };
 
