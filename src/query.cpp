@@ -43,29 +43,6 @@ bool Query::isEmpty() const{
     return empty;
 }
 
-QueryPtr Query::verifyData(DatabasePtr db){
-    QueryPtr q = QSharedPointer<QSqlQuery>(0);
-    if (!this->isEmpty()){
-        qWarning("Error creating QSqlQuery object - Query object is Empty!");
-    } else {
-        q = QueryPtr(new QSqlQuery(*(db.data())));
-        q->setForwardOnly(true);
-    }
-    return q;
-}
-
-QueryPtr Query::toSqlQuery(queryType type, DatabasePtr db, bool &ok){
-    QueryPtr q;
-    if (type == SQL_INSERT){
-        q = this->toInsertQuery(db, ok);
-    } else if (type == SQL_UPDATE){
-        q = this->toUpdateQuery(db, ok);
-    } else {
-        q = this->toSelectQuery(db, ok);
-    }
-    return q;
-}
-
 /** \brief use the map of key/value criteria pairs to build a sub-expression in SQL syntax
  *          that can be used as the WHERE clause in an UPDATE or SELECT query.      */
 QString Query::buildWhereClause(){
@@ -94,50 +71,56 @@ std::string Query::toPqxxQuery(queryType type, QString table){
 }
 
 /** \brief Build a std::string SQL Statement that can be used by the pqxx library to
- *          Select one or more entries from the appropriate table.                 */
-std::string Query::toPqxxSelect(QString table){
+ *          Insert an entry into the appropriate table.                             */
+std::string Query::toPqxxInsert(QString table, bool verbose){
     if (!table.isEmpty()){
         this->tableName = table;
     }
-    this->queryString.clear();
-    QTextStream out(&queryString);
-    out << "SELECT ";
-    if (!selectFields.isEmpty()){
-        QStringListIterator it(selectFields);
-        while(it.hasNext()){
-            out << it.next() << (it.hasNext() ? ", " : "");
+    QString keyString(""), valueString("");
+    QMapIterator<QString, QString> it(data);
+    while(it.hasNext()){
+        it.next();
+        QString key = it.key();
+        QString value = it.value();
+        if (!value.isEmpty() && value != "0" && !value.contains("Unknown")){
+            if(!value.startsWith('\'')) {   value.prepend('\'');    }
+            if(!value.endsWith('\''))   {   value.append('\'');     }
+            valueString += value + (it.hasNext() ? ", " : "");
+            keyString   += key   + (it.hasNext() ? ", " : "");
         }
-    } else {
-        out << "*";
     }
-    out << " FROM " << tableName;
-    if (!criteriaString.isEmpty()){
-        out << " WHERE " << criteriaString;
-    } else if (!criteria.isEmpty()){
-        out << " WHERE " << buildWhereClause();
+    this->queryString = QString("INSERT INTO %1 (%2) VALUES (%3)").arg(this->tableName).arg(keyString).arg(valueString);
+    if (verbose){
+        printQuery();
     }
-    out.flush();
-    printQuery();
     return queryString.toStdString();
 }
+
 /** \brief Build a std::string SQL Statement that can be used by the pqxx library to
  *          Update an entry in the appropriate table.                             */
-std::string Query::toPqxxUpdate(QString table){
+std::string Query::toPqxxUpdate(QString table, bool verbose){
     if (!table.isEmpty()){
         this->tableName = table;
     }
+    bool useNameAsCriteria = (criteria.isEmpty() && data.contains("NAME"));
     this->queryString.clear();
     QString whereString(""), fields(""), values("");
     QMapIterator<QString, QString> it(data);
     while(it.hasNext()){
         it.next();
-        if (!it.value().isEmpty() && it.key() != "NAME"){
-            fields += it.key() + (it.hasNext() ? ", " : "");
-            QString value = it.value();
-            if (!value.startsWith("'")){
-                value = QString("'%1'").arg(it.value());
+        QString key = it.key();
+        QString value = it.value();
+        if (!value.isEmpty()){
+            if (key == "NAME" && useNameAsCriteria){
+                // Skip this one if we're using it as criteria.
+            } else {
+                fields += it.key() + (it.hasNext() ? ", " : "");
+                QString value = it.value();
+                if (!value.startsWith("'")){
+                    value = QString("'%1'").arg(it.value());
+                }
+                values += value + ((it.hasNext()) ? ", " : "");
             }
-            values += value + ((it.hasNext()) ? ", " : "");
         }
     }
     if (!criteria.isEmpty()){
@@ -159,158 +142,65 @@ std::string Query::toPqxxUpdate(QString table){
         qWarning("Error Making update SQL Statement - No Criteria provided.");
     }
     this->queryString = QString("UPDATE %1 SET (%2) = (%3) WHERE %4;").arg(tableName).arg(fields).arg(values).arg(whereString);
-    printQuery();
+    if (verbose){
+        printQuery();
+    }
     return queryString.toStdString();
 }
+
 /** \brief Build a std::string SQL Statement that can be used by the pqxx library to
- *          Insert an entry into the appropriate table.                             */
-std::string Query::toPqxxInsert(QString table){
+ *          Select one or more entries from the appropriate table.
+ *  \param  QString table:  name of table to query. Defaults to the current default table name.
+ *  \param  bool verbose:   defaults to true. Print out query after building.
+ *  \return std::string     string literal containing SQL SELECT statement.
+ */
+std::string Query::toPqxxSelect(QString table, bool verbose){
+    this->queryString.clear();
     if (!table.isEmpty()){
         this->tableName = table;
     }
-    QString keys(""), values("");
-    QTextStream keyOut(&keys), valueOut(&values);
-    QMapIterator<QString, QString> it(data);
-    while(it.hasNext()){
-        it.next();
-        if (!it.value().isEmpty()){
-            keyOut   << it.key()   << (it.hasNext() ? ", " : "");
-            valueOut << it.value() << (it.hasNext() ? ", " : "");
-        }
+    bool proceed = false, useNameAsCriteria = false;
+    if (criteria.isEmpty()){
+        proceed = data.contains("NAME") && !data.value("NAME").isEmpty();
+        useNameAsCriteria = proceed;
+    } else {
+        proceed = true;
+        useNameAsCriteria = false;
     }
-    keyOut.flush();
-    valueOut.flush();
-    this->queryString = QString("INSERT INTO %1 (%2) VALUES (%3)").arg(this->tableName).arg(keys).arg(values);
-    printQuery();
-    return queryString.toStdString();
-}
-
-
-QueryPtr Query::toSelectQuery(DatabasePtr db, bool &ok){
-    QueryPtr q = verifyData(db);
-    QStringList parameters;
-    ok = !q.isNull();
-    if (!ok) {  return q;   }
-    /// Set up Query String
-    this->queryString = "SELECT ";
-    QMapIterator<QString, QString> it(data);
-    while(it.hasNext()){
-        it.next();
-        queryString += it.key() + (it.hasNext() ? ", " : "");
-    }
-    this->queryString.append(" FROM " + this->tableName);
-    if (!criteria.isEmpty()){
-        this->queryString.append(" WHERE ");
-        it = criteria;
+    if (!proceed){
+        qWarning("Can't create SELECT query with empty criteria");
+    } else {
+        this->queryString = "SELECT ";
+        QMapIterator<QString, QString> it(data);
         while(it.hasNext()){
             it.next();
-            this->queryString += QString("%1 = ?").arg(it.key());
-            parameters << it.value();
-            if (it.hasNext()){
-                this->queryString.append(" AND ");
+            QString key = it.key();
+            if (!key.isEmpty()){
+                queryString += key + (it.hasNext() ? " AND " : "");
+            }
+        }
+        queryString.append(QString("FROM %1 WHERE ").arg(tableName));
+        if (useNameAsCriteria){
+            QString name = data.value("NAME");
+            if (!name.startsWith('\'')) {   name.prepend('\''); }
+            if (!name.endsWith('\''))   {   name.append('\'');  }
+            queryString += "NAME = " + name;
+        } else {
+            it = criteria;
+            while(it.hasNext()){
+                QString key = it.key();
+                QString value = it.value();
+                if (!key.isEmpty() && !value.isEmpty()){
+                    queryString += QString("%1 = %2").arg(key).arg(value) + (it.hasNext() ? " AND " : "");
+                }
             }
         }
     }
-    /// Set up QueryPointer Object
-    if (!q->prepare(queryString)){
-        qWarning("Error Preparing Query: '%s'", qPrintable(queryString));
-        return q;
-    } else {
-        foreach(QString param, parameters){
-            q->addBindValue(param.toLocal8Bit());
-        }
+    if (verbose){
         printQuery();
     }
-    return q;
+    return this->queryString.toStdString();
 }
-
-QueryPtr Query::toSelectQuery(QString query, DatabasePtr db, bool &ok){
-    QueryPtr q = QSharedPointer<QSqlQuery>(new QSqlQuery(*(db.data())));
-    q->setForwardOnly(true);
-    ok = q->prepare(query);
-    if (!ok){
-        qWarning("Error Preparing SELECT Query:\n\t%s", qPrintable(query));
-    }
-    return q;
-}
-
-QueryPtr Query::toUpdateQuery(DatabasePtr db, bool &ok){
-    QueryPtr q = verifyData(db);
-    ok = !q.isNull();
-    if (!ok) {  return q;   }
-
-    QString fields(""), values(""), whereString("");
-    QStringList args;
-    QMapIterator<QString, QString> it(data);
-    while(it.hasNext()){
-        it.next();
-        if (!it.value().isEmpty() && it.key() != "NAME"){
-            fields += it.key() + (it.hasNext() ? ", " : "");
-            values += QString("?") + ((it.hasNext()) ? ", " : "");
-            args << it.value();
-        }
-    }
-    if (!criteria.isEmpty()){
-        it = criteria;
-        while(it.hasNext()){
-            whereString.append(QString("%1 = ?").arg(it.key()));
-            args << it.value();
-            if (it.hasNext()){
-                whereString.append(" AND ");
-            }
-        }
-    } else if (data.contains("NAME")){
-        QString name = data.value("NAME");
-        if (!name.startsWith('\'')) {   name.prepend('\''); }
-        if (!name.endsWith('\''))   {   name.append('\'');  }
-        whereString = QString("NAME = %1").arg(name);
-    }
-    QString text = QString("UPDATE %1 SET (%2) = (%3) WHERE %4;").arg(tableName).arg(fields).arg(values).arg(whereString);
-    ok = q->prepare(text);
-    if (!ok){
-        qWarning("Error Preparing UPDATE Query '%s'", qPrintable(text));
-        return q;
-    } else {
-        foreach(QString arg, args){
-            q->addBindValue(arg);
-        }
-    }
-    return q;
-}
-
-
-QueryPtr Query::toInsertQuery(DatabasePtr db, bool &ok){
-    QueryPtr q = verifyData(db);
-    ok = !q.isNull();
-    if (!ok) {  return q;   }
-    QString fields(""), values("");
-    QMapIterator<QString, QString>it(data);
-    while(it.hasNext()){
-        it.next();
-        fields.append(it.key());
-        values.append("?");
-        if (it.hasNext()){
-            fields.append(", ");
-            values.append(", ");
-        }
-    }
-    QString queryString = QString("INSERT INTO %1 ( %2 ) VALUES ( %3 )").arg(tableName).arg(fields).arg(values);
-    q->setForwardOnly(true);
-    if (!q->prepare(queryString)){
-        qWarning("Error Preparing INSERT Query\n\t%s", qPrintable(queryString));
-        ok = false;
-        return q;
-    } else {
-        it = data;
-        while(it.hasNext()){
-            it.next();
-            q->addBindValue(it.value());
-        }
-        ok = true;
-    }
-    return q;
-}
-
 
 void Query::add(QString key, QDate value)               {   data.insert(key, sqlSafe(value));   }
 void Query::add(QString key, QDateTime value)           {   data.insert(key, sqlSafe(value));   }

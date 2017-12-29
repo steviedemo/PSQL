@@ -31,17 +31,11 @@ public:
     void                    addCriteria (QString key, class QDate value);
     void                    addCriteria (QString key, class QDateTime value);
     void                    addCriteria (QString key, class Height value);
-    QueryPtr                verifyData  (DatabasePtr db);
 
-    QueryPtr                toSqlQuery      (queryType type, DatabasePtr db, bool &ok);
-    QueryPtr                toSelectQuery   (QString, DatabasePtr db, bool &ok);
-    QueryPtr                toSelectQuery   (DatabasePtr db, bool &ok);
-    QueryPtr                toInsertQuery   (DatabasePtr db, bool &ok);
-    QueryPtr                toUpdateQuery   (DatabasePtr db, bool &ok);
     /// using pqxx class
-    std::string             toPqxxInsert    (QString table="");
-    std::string             toPqxxUpdate    (QString table="");
-    std::string             toPqxxSelect    (QString table="");
+    std::string             toPqxxInsert    (QString table="", bool verbose=true);
+    std::string             toPqxxUpdate    (QString table="", bool verbose=true);
+    std::string             toPqxxSelect    (QString table="", bool verbose=true);
     std::string             toPqxxQuery     (queryType type, QString table="");
     static QString          sqlSafe     (int i);
     static QString          sqlSafe     (double d);
