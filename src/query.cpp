@@ -5,6 +5,7 @@
 #include <QString>
 #include <QSqlQuery>
 #include <QTextStream>
+#include "Height.h"
 enum type { QUERY_INSERT, QUERY_UPDATE, QUERY_SELECT };
 Query::Query(QString query_text):
     queryString(query_text){
@@ -96,16 +97,15 @@ std::string Query::toPqxxInsert(QString table, bool verbose){
     return queryString.toStdString();
 }
 
-/** \brief Build a std::string SQL Statement that can be used by the pqxx library to
- *          Update an entry in the appropriate table.                             */
-std::string Query::toPqxxUpdate(QString table, bool verbose){
+QSqlQuery Query::toQSqlUpdate(QString table){
     if (!table.isEmpty()){
         this->tableName = table;
     }
     bool useNameAsCriteria = (criteria.isEmpty() && data.contains("NAME"));
     this->queryString.clear();
-    QString whereString(""), fields(""), values("");
+    QString whereString(""), fields(""), valueField("");
     QMapIterator<QString, QString> it(data);
+    QStringList values;
     while(it.hasNext()){
         it.next();
         QString key = it.key();
@@ -114,8 +114,72 @@ std::string Query::toPqxxUpdate(QString table, bool verbose){
             if (key == "NAME" && useNameAsCriteria){
                 // Skip this one if we're using it as criteria.
             } else {
+                fields += key + (it.hasNext() ? ", " : "");
+                valueField += QString(":%1").arg(key) + (it.hasNext() ? ", " : "");
+                QString value = it.value();
+                if (!value.startsWith("'")){
+                    value = QString("'%1'").arg(it.value());
+                    data[key] = value;
+                }
+            }
+        }
+    }
+    QStringList whereArgs;
+    if (!criteria.isEmpty()){
+        it = criteria;
+        while(it.hasNext()){
+            it.next();
+            if (!it.value().isEmpty()){
+                whereString.append(QString("%1 = :%1").arg(it.key()).arg(it.value()));
+                if (it.hasNext()){
+                    whereString.append(" AND ");
+                }
+                whereArgs << it.value();
+                data.insert(it.key(), it.value());
+            }
+        }
+    } else if (data.contains("NAME")){
+        QString name = data.value("NAME");
+        if (!name.startsWith('\'')) {   name.prepend('\''); }
+        if (!name.endsWith('\''))   {   name.append('\'');  }
+        whereString = QString("NAME = :NAME");
+    }
+    QSqlQuery query;
+    this->queryString = QString("UPDATE %1 SET (%2) = (%3) WHERE %4;").arg(tableName).arg(fields).arg(valueField).arg(whereString);
+    if (!query.prepare(queryString)){
+        qWarning("error preparing update string");
+    }
+    it = data;
+    while(it.hasNext()){
+        it.next();
+        //query.addBindValue(QString(":%1").arg(it.key()), it.value());
+    }
+    return query;
+}
+
+/** \brief Build a std::string SQL Statement that can be used by the pqxx library to
+ *          Update an entry in the appropriate table.                             */
+std::string Query::toPqxxUpdate(QString table, bool verbose){
+    if (!table.isEmpty()){
+        this->tableName = table;
+    }
+  //  qDebug("Assembling Query Statement for Updating Actor Profile in Database");
+    bool useNameAsCriteria = (criteria.isEmpty() && data.contains("NAME"));
+    this->queryString.clear();
+    QString whereString(""), fields(""), values("");
+    QMapIterator<QString, QString> it(data);
+    while(it.hasNext()){
+        it.next();
+        QString key = it.key();
+        QString value = it.value();
+   //     qDebug("%s :: %s", qPrintable(key), qPrintable(value));
+        if (!value.isEmpty()){
+            if (key == "NAME" && useNameAsCriteria){
+                // Skip this one if we're using it as criteria.
+            } else {
                 fields += it.key() + (it.hasNext() ? ", " : "");
                 QString value = it.value();
+
                 if (!value.startsWith("'")){
                     value = QString("'%1'").arg(it.value());
                 }
@@ -123,12 +187,15 @@ std::string Query::toPqxxUpdate(QString table, bool verbose){
             }
         }
     }
+ //   qDebug("Adding Criteria...");
     if (!criteria.isEmpty()){
-        it = criteria;
-        while(it.hasNext()){
-            if (!it.value().isEmpty()){
-                whereString.append(QString("%1 = %2").arg(it.key()).arg(it.value()));
-                if (it.hasNext()){
+        QMapIterator<QString, QString> crIt(criteria);
+        while(crIt.hasNext()){
+            crIt.next();
+    //        qDebug("%s :: %s", qPrintable(crIt.key()), qPrintable(crIt.value()));
+            if (!crIt.value().isEmpty()){
+                whereString.append(QString("%1 = %2").arg(crIt.key()).arg(crIt.value()));
+                if (crIt.hasNext()){
                     whereString.append(" AND ");
                 }
             }
@@ -188,6 +255,7 @@ std::string Query::toPqxxSelect(QString table, bool verbose){
         } else {
             it = criteria;
             while(it.hasNext()){
+                it.next();
                 QString key = it.key();
                 QString value = it.value();
                 if (!key.isEmpty() && !value.isEmpty()){
@@ -202,8 +270,20 @@ std::string Query::toPqxxSelect(QString table, bool verbose){
     return this->queryString.toStdString();
 }
 
-void Query::add(QString key, QDate value)               {   data.insert(key, sqlSafe(value));   }
-void Query::add(QString key, QDateTime value)           {   data.insert(key, sqlSafe(value));   }
+void Query::add(QString key, QDate value) {
+    QString sqlValue("");
+    if (!value.isNull() && value.isValid()){
+        sqlValue = value.toString("yyyy-MM-dd");
+        sqlValue.prepend('\'');
+        sqlValue.append('\'');
+        data.insert(key, sqlValue);
+    }
+}
+void Query::add(QString key, QDateTime value) {
+    QDate date = value.date();
+    add(key, date);
+}
+
 void Query::addCriteria(QString key, double value)      {   criteria.insert(key, sqlSafe(value));   }
 void Query::addCriteria(QString key, int value)         {   criteria.insert(key, sqlSafe(value));   }
 void Query::addCriteria(QString key, QString value)     {   criteria.insert(key, sqlSafe(value));   }
@@ -217,6 +297,13 @@ void Query::add(QString key){
 void Query::add(QString key, int value){
     if (value > 0){
         data.insert(key, QString::number(value));
+    }
+}
+void Query::add(QString key, Height height){
+    if (height.getFeet() == 0){
+        QString value = QString("\'%1\'\'%2\"\'").arg(height.getFeet()).arg(height.getInches());
+    //    qDebug("Adding Height to Query: %s", qPrintable(value));
+        data.insert(key, value);
     }
 }
 
@@ -257,7 +344,7 @@ QString Query::sqlSafe  (QDateTime d)   {   return sqlSafe(d.date());           
 QString Query::sqlSafe  (QDate d)       {
     QString s("");
     if (d.isValid() && !d.isNull())
-        s=d.toString("'yyyy-MM-dd'");
+        s=d.toString("\'yyyy-MM-dd\'");
     else
         s = "''";
     return s;
@@ -280,7 +367,7 @@ QString Query::sqlSafe(QString s){
     } catch (...) {
         qWarning("Caught Unknown Exception while creating SQL safe string from '%s'", qPrintable(temp));
     }
-    temp.prepend("'");
-    temp.append("'");
+    temp.prepend("\'");
+    temp.append("\'");
     return temp;
 }

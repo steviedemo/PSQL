@@ -25,6 +25,7 @@ public:
     void                    add         (QString key, int value);
     void                    add         (QString key, class QDate value);
     void                    add         (QString key, class QDateTime value);
+    void                    add         (QString key, class Height);
     void                    addCriteria (QString key, double value);
     void                    addCriteria (QString key, QString value);
     void                    addCriteria (QString key, int value);
@@ -37,6 +38,10 @@ public:
     std::string             toPqxxUpdate    (QString table="", bool verbose=true);
     std::string             toPqxxSelect    (QString table="", bool verbose=true);
     std::string             toPqxxQuery     (queryType type, QString table="");
+    QSqlQuery              toQSqlInsert    (QString table="");
+    QSqlQuery              toQSqlUpdate    (QString table="");
+    QSqlQuery              toQSqlSelect    (QString table="");
+    QSqlQuery               toQSqlQuery     (QString table="");
     static QString          sqlSafe     (int i);
     static QString          sqlSafe     (double d);
     static QString          sqlSafe     (QString s);
