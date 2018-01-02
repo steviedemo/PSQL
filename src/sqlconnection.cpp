@@ -10,7 +10,7 @@
 #include <pqxx/connection.hxx>
 #include <pqxx/result.hxx>
 #include <pqxx/tablereader.hxx>
-#define trace(); qDebug("%s::%s::%d", __FILE__, __FUNCTION__, __LINE__);
+#define trace(); //qDebug("%s::%s::%d", __FILE__, __FUNCTION__, __LINE__);
 using namespace pqxx;
 sqlConnection::sqlConnection(std::string sqlStatement):
     host(HOST), username(USERNAME), password(PASSWORD), dbName(DB_NAME), name(DEFAULT_NAME), query_string(sqlStatement){
@@ -129,7 +129,6 @@ bool sqlConnection::verify(){
             }
         } else {
             success = true;
-            qDebug("pqxx connection okay.");
         }
     } catch (std::exception &e){
         qWarning("Caught Exception while verifying database connection and SQL Statement: %s", e.what());

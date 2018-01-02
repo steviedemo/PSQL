@@ -92,7 +92,7 @@ std::string Query::toPqxxInsert(QString table, bool verbose){
     }
     this->queryString = QString("INSERT INTO %1 (%2) VALUES (%3)").arg(this->tableName).arg(keyString).arg(valueString);
     if (verbose){
-        printQuery();
+   //     printQuery();
     }
     return queryString.toStdString();
 }
@@ -210,7 +210,7 @@ std::string Query::toPqxxUpdate(QString table, bool verbose){
     }
     this->queryString = QString("UPDATE %1 SET (%2) = (%3) WHERE %4;").arg(tableName).arg(fields).arg(values).arg(whereString);
     if (verbose){
-        printQuery();
+   //     printQuery();
     }
     return queryString.toStdString();
 }
@@ -265,7 +265,7 @@ std::string Query::toPqxxSelect(QString table, bool verbose){
         }
     }
     if (verbose){
-        printQuery();
+    //    printQuery();
     }
     return this->queryString.toStdString();
 }
@@ -317,9 +317,15 @@ void Query::add(QString key, QString value)             {
     if (!value.isNull() && !value.isEmpty() \
             && value != "/." && !value.contains(QRegularExpression("[\\[\\]\\<\\>]"))\
             && value != "0'00\""){
-        QString sqlSafeValue = sqlSafe(value);
-        if (sqlSafeValue != "''"){
-            data.insert(key, value);
+        QString entry = QString("%1").arg(value);
+        if(entry.startsWith('\''))
+            entry.remove(0, 1);
+        if (entry.endsWith('\''))
+            entry.remove(QRegularExpression("\\\'$"));
+        entry.replace('\'', "\'\'");
+        QString newEntry = QString("\'%1\'").arg(entry);
+        if (newEntry != "''"){
+            data.insert(key, newEntry);
         }
     }
 }
@@ -352,7 +358,9 @@ QString Query::sqlSafe  (QDate d)       {
 
 QString Query::sqlSafe(QString s){
     // Any apostrophe needs to be escaped with a second apostrophe. Semicolons and Quotation marks must be removed outright.
-    QString temp = s.replace("'", "''").remove('\"').remove(';');
+    QString temp = s.replace('\'', "\'\'");
+    temp = temp.remove('\"');
+    temp = temp.remove(';');
     // Remove any starting/ending apostrophes.
     try{
         while(temp.startsWith("'")){
