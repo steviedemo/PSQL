@@ -24,6 +24,7 @@ public:
     QString     getQuery(void);
     bool        execute ();
     bool        execute (std::string sqlStatement);
+    bool        execute (Query q, queryType t);
     pqxx::result getResult();
     int         countResults();
     bool        foundMatch();

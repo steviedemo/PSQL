@@ -137,6 +137,11 @@ bool sqlConnection::verify(){
     return success;
 }
 
+/** \brief Execute a PQXX Query based on the provided Query Object & queryType specifier. */
+bool sqlConnection::execute(Query q, queryType t){
+    std::string sql_statement = q.toPqxxQuery(t, "scenes");
+    return this->execute(sql_statement);
+}
 
 /** \brief Execute a PQXX Query that has been previously stored. */
 bool sqlConnection::execute(){
@@ -145,11 +150,8 @@ bool sqlConnection::execute(){
         try{
             const char* sql_statement = this->query_string.c_str();
             nontransaction session(*databaseConnection);
-            trace();
             this->lastResult = pqxx::result(session.exec(sql_statement));
-            trace();
             session.commit();
-            trace();
             success = true;
         } catch (std::exception &e){
             qWarning("Caught Exception while running query '%s':\n\t%s\n",query_string.c_str(), e.what());
