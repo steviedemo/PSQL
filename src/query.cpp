@@ -88,11 +88,12 @@ std::string Query::toPqxxInsert(QString table, bool verbose){
             if(!value.endsWith('\''))   {   value.append('\'');     }
             valueString += value + (it.hasNext() ? ", " : "");
             keyString   += key   + (it.hasNext() ? ", " : "");
+          //  qDebug("Query Adding Field '%s' = %s", qPrintable(key), qPrintable(value));
         }
     }
     this->queryString = QString("INSERT INTO %1 (%2) VALUES (%3)").arg(this->tableName).arg(keyString).arg(valueString);
     if (verbose){
-   //     printQuery();
+        //printQuery();
     }
     return queryString.toStdString();
 }
@@ -315,7 +316,7 @@ void Query::add(QString key, double value){
 /** \brief Add a QString Value to the map of Query Parameters */
 void Query::add(QString key, QString value)             {
     if (!value.isNull() && !value.isEmpty() \
-            && value != "/." && !value.contains(QRegularExpression("[\\[\\]\\<\\>]"))\
+            && value != "/." && !value.contains(QRegularExpression("[\\<\\>]"))\
             && value != "0'00\""){
         QString entry = QString("%1").arg(value);
         if(entry.startsWith('\''))

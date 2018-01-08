@@ -54,6 +54,15 @@ sqlConnection::~sqlConnection(){
         qWarning("Caught Exception in sqlConnection Destructor: %s", e.what());
     }
 }
+bool sqlConnection::getRawConnection(connection *DbConnection){
+    bool open = false;
+    if (!this->databaseConnection->is_open()){
+        open = true;
+        DbConnection = this->databaseConnection;
+    }
+    return open;
+}
+
 
 /** \brief Check if any records were returned from the last query ran. */
 bool sqlConnection::foundMatch(){

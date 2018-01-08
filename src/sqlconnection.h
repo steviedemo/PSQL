@@ -26,6 +26,7 @@ public:
     bool        execute (std::string sqlStatement);
     bool        execute (Query q, queryType t);
     pqxx::result getResult();
+    bool        getRawConnection(pqxx::connection *dbConnection);
     int         countResults();
     bool        foundMatch();
     bool        isConnected();
