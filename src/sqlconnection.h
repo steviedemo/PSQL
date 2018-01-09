@@ -20,7 +20,6 @@ public:
     void        clear();
     void        setQuery(Query,     queryType);
     void        setQuery(const std::string text);
-    void        setQuery(const QString s) { setQuery(s.toStdString()); }
     QString     getQuery(void);
     bool        execute ();
     bool        execute (std::string sqlStatement);

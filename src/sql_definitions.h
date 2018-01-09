@@ -21,7 +21,7 @@ enum queryType  { SQL_INSERT, SQL_UPDATE, SQL_SELECT };
 
 
 #define ADB_TABLE 	"CREATE TABLE IF NOT EXISTS ACTORS("\
-                    "ID				smallserial 	primary key,"\
+                    "ID				serial          primary key,"\
                     "NAME 			text 			unique not null,"\
                     "ALIASES		text,"\
                     "BIRTHDAY		date,"\
@@ -35,6 +35,7 @@ enum queryType  { SQL_INSERT, SQL_UPDATE, SQL_SELECT };
                     "EYES			text,"\
                     "TATTOOS		text,"\
                     "PIERCINGS		text,"\
+                    "FAVOURITE      bool,"\
                     "PHOTO			text)"
 #define SDB_TABLE	"CREATE TABLE IF NOT EXISTS SCENES("\
                     "ID				serial			primary key,"\
@@ -45,8 +46,8 @@ enum queryType  { SQL_INSERT, SQL_UPDATE, SQL_SELECT };
                     "SERIES			text,"\
                     "SCENE_NO		integer,"\
                     "RATING			text,"\
-                    "SIZE			float8,"\
-                    "LENGTH			float8,"\
+                    "SIZE			integer,"\
+                    "LENGTH			text,"\
                     "WIDTH			integer,"\
                     "HEIGHT			integer,"\
                     "ADDED			date,"\

@@ -23,6 +23,7 @@ public:
     void                    add         (QString key, double value);
     void                    add         (QString key, QString value);
     void                    add         (QString key, int value);
+    void                    add         (QString key, qint64 value);
     void                    add         (QString key, class QDate value);
     void                    add         (QString key, class QDateTime value);
     void                    add         (QString key, class Height);

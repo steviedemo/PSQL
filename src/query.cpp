@@ -295,6 +295,12 @@ void Query::add(QString key){
     data.insert(key, "");
 }
 
+void Query::add(QString key, qint64 value){
+    if (value > 0){
+        data.insert(key, QString::number(value));
+    }
+}
+
 void Query::add(QString key, int value){
     if (value > 0){
         data.insert(key, QString::number(value));
