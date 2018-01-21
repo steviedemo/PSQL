@@ -83,7 +83,7 @@ std::string Query::toPqxxInsert(QString table, bool verbose){
         it.next();
         QString key = it.key();
         QString value = it.value();
-        if (!value.isEmpty() && value != "0" && !value.contains("Unknown")){
+        if (!value.isEmpty() && value != "0" && !value.contains("No Data")){
             if(!value.startsWith('\'')) {   value.prepend('\'');    }
             if(!value.endsWith('\''))   {   value.append('\'');     }
             valueString += value + (it.hasNext() ? ", " : "");
@@ -97,7 +97,64 @@ std::string Query::toPqxxInsert(QString table, bool verbose){
     }
     return queryString.toStdString();
 }
+/** \brief Build a std::string SQL Statement that can be used by the pqxx library to
+ *          Update an entry in the appropriate table.                             */
+std::string Query::toPqxxUpdate(QString table, bool verbose){
+    if (!table.isEmpty()){
+        this->tableName = table;
+    }
+  //  qDebug("Assembling Query Statement for Updating Actor Profile in Database");
+    bool useNameAsCriteria = (criteria.isEmpty() && data.contains("NAME"));
+    this->queryString.clear();
+    QString whereString(""), fields(""), values("");
+    QMapIterator<QString, QString> it(data);
+    while(it.hasNext()){
+        it.next();
+        QString key = it.key();
+        QString value = it.value();
+   //     qDebug("%s :: %s", qPrintable(key), qPrintable(value));
+        if (!value.isEmpty()){
+            if (key == "NAME" && useNameAsCriteria){
+                // Skip this one if we're using it as criteria.
+            } else {
+                fields += it.key() + (it.hasNext() ? ", " : "");
+                QString value = it.value();
 
+                if (!value.startsWith("'")){
+                    value = QString("'%1'").arg(it.value());
+                }
+                values += value + ((it.hasNext()) ? ", " : "");
+            }
+        }
+    }
+ //   qDebug("Adding Criteria...");
+    if (!criteria.isEmpty()){
+        QMapIterator<QString, QString> crIt(criteria);
+        while(crIt.hasNext()){
+            crIt.next();
+    //        qDebug("%s :: %s", qPrintable(crIt.key()), qPrintable(crIt.value()));
+            if (!crIt.value().isEmpty()){
+                whereString.append(QString("%1 = %2").arg(crIt.key()).arg(crIt.value()));
+                if (crIt.hasNext()){
+                    whereString.append(" AND ");
+                }
+            }
+        }
+    } else if (data.contains("NAME")){
+        QString name = data.value("NAME");
+        if (!name.startsWith('\'')) {   name.prepend('\''); }
+        if (!name.endsWith('\''))   {   name.append('\'');  }
+        whereString = QString("NAME = %1").arg(name);
+    } else {
+        qWarning("Error Making update SQL Statement - No Criteria provided.");
+    }
+    this->queryString = QString("UPDATE %1 SET (%2) = (%3) WHERE %4;").arg(tableName).arg(fields).arg(values).arg(whereString);
+    if (verbose){
+   //     printQuery();
+    }
+    return queryString.toStdString();
+}
+#ifdef QSQLQUERY
 QSqlQuery Query::toQSqlUpdate(QString table){
     if (!table.isEmpty()){
         this->tableName = table;
@@ -158,64 +215,8 @@ QSqlQuery Query::toQSqlUpdate(QString table){
     return query;
 }
 
-/** \brief Build a std::string SQL Statement that can be used by the pqxx library to
- *          Update an entry in the appropriate table.                             */
-std::string Query::toPqxxUpdate(QString table, bool verbose){
-    if (!table.isEmpty()){
-        this->tableName = table;
-    }
-  //  qDebug("Assembling Query Statement for Updating Actor Profile in Database");
-    bool useNameAsCriteria = (criteria.isEmpty() && data.contains("NAME"));
-    this->queryString.clear();
-    QString whereString(""), fields(""), values("");
-    QMapIterator<QString, QString> it(data);
-    while(it.hasNext()){
-        it.next();
-        QString key = it.key();
-        QString value = it.value();
-   //     qDebug("%s :: %s", qPrintable(key), qPrintable(value));
-        if (!value.isEmpty()){
-            if (key == "NAME" && useNameAsCriteria){
-                // Skip this one if we're using it as criteria.
-            } else {
-                fields += it.key() + (it.hasNext() ? ", " : "");
-                QString value = it.value();
 
-                if (!value.startsWith("'")){
-                    value = QString("'%1'").arg(it.value());
-                }
-                values += value + ((it.hasNext()) ? ", " : "");
-            }
-        }
-    }
- //   qDebug("Adding Criteria...");
-    if (!criteria.isEmpty()){
-        QMapIterator<QString, QString> crIt(criteria);
-        while(crIt.hasNext()){
-            crIt.next();
-    //        qDebug("%s :: %s", qPrintable(crIt.key()), qPrintable(crIt.value()));
-            if (!crIt.value().isEmpty()){
-                whereString.append(QString("%1 = %2").arg(crIt.key()).arg(crIt.value()));
-                if (crIt.hasNext()){
-                    whereString.append(" AND ");
-                }
-            }
-        }
-    } else if (data.contains("NAME")){
-        QString name = data.value("NAME");
-        if (!name.startsWith('\'')) {   name.prepend('\''); }
-        if (!name.endsWith('\''))   {   name.append('\'');  }
-        whereString = QString("NAME = %1").arg(name);
-    } else {
-        qWarning("Error Making update SQL Statement - No Criteria provided.");
-    }
-    this->queryString = QString("UPDATE %1 SET (%2) = (%3) WHERE %4;").arg(tableName).arg(fields).arg(values).arg(whereString);
-    if (verbose){
-   //     printQuery();
-    }
-    return queryString.toStdString();
-}
-
+#endif
 /** \brief Build a std::string SQL Statement that can be used by the pqxx library to
  *          Select one or more entries from the appropriate table.
  *  \param  QString table:  name of table to query. Defaults to the current default table name.
@@ -321,6 +322,9 @@ void Query::add(QString key, double value){
 }
 /** \brief Add a QString Value to the map of Query Parameters */
 void Query::add(QString key, QString value)             {
+    if (key.contains("filename", Qt::CaseInsensitive)){
+        qDebug("Adding Filename to query: %s", qPrintable(value));
+    }
     if (!value.isNull() && !value.isEmpty() \
             && value != "/." && !value.contains(QRegularExpression("[\\<\\>]"))\
             && value != "0'00\""){
@@ -331,9 +335,15 @@ void Query::add(QString key, QString value)             {
             entry.remove(QRegularExpression("\\\'$"));
         entry.replace('\'', "\'\'");
         QString newEntry = QString("\'%1\'").arg(entry);
+        if (key.contains("filename", Qt::CaseInsensitive)){
+            qDebug("Formatted Value: %s", qPrintable(newEntry));
+        }
         if (newEntry != "''"){
             data.insert(key, newEntry);
         }
+    }
+    if (key.contains("filename", Qt::CaseInsensitive)){
+        qDebug("\n");
     }
 }
 

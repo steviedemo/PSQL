@@ -39,10 +39,12 @@ public:
     std::string             toPqxxUpdate    (QString table, bool verbose=true);
     std::string             toPqxxSelect    (QString table, bool verbose=true);
     std::string             toPqxxQuery     (queryType type, QString table="");
+#ifdef QSQLQUERY
     QSqlQuery               toQSqlInsert    (QString table="");
     QSqlQuery               toQSqlUpdate    (QString table="");
     QSqlQuery               toQSqlSelect    (QString table="");
     QSqlQuery               toQSqlQuery     (QString table="");
+#endif
     static QString          sqlSafe         (int i);
     static QString          sqlSafe         (double d);
     static QString          sqlSafe         (QString s);
