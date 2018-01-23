@@ -1,5 +1,5 @@
 #include "sqlconnection.h"
-#include "query.h"
+#include "Query.h"
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlTableModel>

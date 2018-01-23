@@ -1,7 +1,7 @@
 #ifndef SQLCONNECTION_H
 #define SQLCONNECTION_H
 #include "sql_definitions.h"
-#include "query.h"
+#include "Query.h"
 #include <QString>
 #include <QSqlDatabase>
 #include <pqxx/pqxx>

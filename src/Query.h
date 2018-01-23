@@ -2,6 +2,7 @@
 #define QUERY_H
 #include "sql_definitions.h"
 #include <QMap>
+#include <QStringList>
 #include <QSharedPointer>
 #include <QSqlQuery>
 #include <QSqlDatabase>
