@@ -321,26 +321,30 @@ void Query::add(QString key, double value){
     }
 }
 /** \brief Add a QString Value to the map of Query Parameters */
-void Query::add(QString key, QString value)             {
+void Query::add(const QString &key, const QString &value)             {
     if (key.contains("filename", Qt::CaseInsensitive)){
         qDebug("Adding Filename to query: %s", qPrintable(value));
     }
-    if (!value.isNull() && !value.isEmpty() \
-            && value != "/." && !value.contains(QRegularExpression("[\\<\\>]"))\
-            && value != "0'00\""){
-        QString entry = QString("%1").arg(value);
-        if(entry.startsWith('\''))
-            entry.remove(0, 1);
-        if (entry.endsWith('\''))
-            entry.remove(QRegularExpression("\\\'$"));
-        entry.replace('\'', "\'\'");
-        QString newEntry = QString("\'%1\'").arg(entry);
-        if (key.contains("filename", Qt::CaseInsensitive)){
-            qDebug("Formatted Value: %s", qPrintable(newEntry));
-        }
-        if (newEntry != "''"){
-            data.insert(key, newEntry);
-        }
+    if (!value.isNull() && !value.isEmpty()){
+            if (value != "/."){
+                if (!value.contains(QRegularExpression("[\\<\\>]"))){
+                    if (value != "0'00\""){
+                        QString entry = QString("%1").arg(value);
+                        if(entry.startsWith('\''))
+                            entry.remove(0, 1);
+                        if (entry.endsWith('\''))
+                            entry.remove(QRegularExpression("\\\'$"));
+                        entry.replace('\'', "\'\'");
+                        QString newEntry = QString("\'%1\'").arg(entry);
+                        if (key.contains("filename", Qt::CaseInsensitive)){
+                            qDebug("Formatted Value: %s", qPrintable(newEntry));
+                        }
+                        if (newEntry != "''"){
+                            data.insert(key, newEntry);
+                        }
+                    }
+                }
+            }
     }
     if (key.contains("filename", Qt::CaseInsensitive)){
         qDebug("\n");
