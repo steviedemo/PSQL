@@ -272,7 +272,7 @@ std::string Query::toPqxxSelect(QString table, bool verbose){
     return this->queryString.toStdString();
 }
 
-void Query::add(QString key, QDate value) {
+void Query::add(const QString &key, const QDate &value) {
     QString sqlValue("");
     if (!value.isNull() && value.isValid()){
         sqlValue = value.toString("yyyy-MM-dd");
@@ -281,28 +281,28 @@ void Query::add(QString key, QDate value) {
         data.insert(key, sqlValue);
     }
 }
-void Query::add(QString key, QDateTime value) {
+void Query::add(const QString &key, const QDateTime &value) {
     QDate date = value.date();
     add(key, date);
 }
 
-void Query::addCriteria(QString key, double value)      {   criteria.insert(key, sqlSafe(value));   }
-void Query::addCriteria(QString key, int value)         {   criteria.insert(key, sqlSafe(value));   }
-void Query::addCriteria(QString key, QString value)     {   criteria.insert(key, sqlSafe(value));   }
-void Query::addCriteria(QString key, QDate value)       {   criteria.insert(key, sqlSafe(value));   }
-void Query::addCriteria(QString key, QDateTime value)   {   criteria.insert(key, sqlSafe(value));   }
+void Query::addCriteria(const QString &key, const double &value)      {   criteria.insert(key, sqlSafe(value));   }
+void Query::addCriteria(const QString &key, const int &value)         {   criteria.insert(key, sqlSafe(value));   }
+void Query::addCriteria(const QString &key, const QString &value)     {   criteria.insert(key, sqlSafe(value));   }
+void Query::addCriteria(const QString &key, const QDate &value)       {   criteria.insert(key, sqlSafe(value));   }
+void Query::addCriteria(const QString &key, const QDateTime &value)   {   criteria.insert(key, sqlSafe(value));   }
 
 void Query::add(QString key){
     data.insert(key, "");
 }
 
-void Query::add(QString key, qint64 value){
+void Query::add(const QString &key, const qint64 &value){
     if (value > 0){
         data.insert(key, QString::number(value));
     }
 }
 
-void Query::add(QString key, int value){
+void Query::add(const QString &key, const int &value){
     if (value > 0){
         data.insert(key, QString::number(value));
     }
@@ -315,13 +315,13 @@ void Query::add(QString key, Height height){
     }
 }
 
-void Query::add(QString key, double value){
+void Query::add(const QString &key, const double &value){
     if (value > 0.0){
         data.insert(key, QString::number(value, 'f', 2));
     }
 }
 /** \brief Add a QString Value to the map of Query Parameters */
-void Query::add(const QString &key, const QString &value)             {
+void Query::add(const QString &key, const QString &value){
     if (key.contains("filename", Qt::CaseInsensitive)){
         qDebug("Adding Filename to query: %s", qPrintable(value));
     }
@@ -352,7 +352,7 @@ void Query::add(const QString &key, const QString &value)             {
 }
 
 
-QString Query::sqlSafe  (int i) {
+QString Query::sqlSafe (const int i) {
     QString value("");
     if (i != 0){
         value = QString("%1").arg(i);
@@ -360,15 +360,15 @@ QString Query::sqlSafe  (int i) {
     return value;
 }
 
-QString Query::sqlSafe  (double d) {
+QString Query::sqlSafe (const double d) {
     QString value("");
     if (d != 0.0){
         value = QString::number(d, 'f', 2);
     }
     return value;
 }
-QString Query::sqlSafe  (QDateTime d)   {   return sqlSafe(d.date());           }
-QString Query::sqlSafe  (QDate d)       {
+QString Query::sqlSafe (const QDateTime d)   {   return sqlSafe(d.date());           }
+QString Query::sqlSafe (const QDate d)       {
     QString s("");
     if (d.isValid() && !d.isNull())
         s=d.toString("\'yyyy-MM-dd\'");
@@ -377,9 +377,10 @@ QString Query::sqlSafe  (QDate d)       {
     return s;
 }
 
-QString Query::sqlSafe(QString s){
+QString Query::sqlSafe (const QString s) {
     // Any apostrophe needs to be escaped with a second apostrophe. Semicolons and Quotation marks must be removed outright.
-    QString temp = s.replace('\'', "\'\'");
+    QString temp = QString("%1").arg(s);
+    temp = temp.replace('\'', "\'\'");
     temp = temp.remove('\"');
     temp = temp.remove(';');
     // Remove any starting/ending apostrophes.

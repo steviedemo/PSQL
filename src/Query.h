@@ -21,19 +21,19 @@ public:
     void                    selectAll   (void);
     void                    setCriteria (QString whereClause);
     void                    add         (QString key);
-    void                    add         (QString key, double value);
-    void                    add         (QString key, QString value);
-    void                    add         (QString key, int value);
-    void                    add         (QString key, qint64 value);
-    void                    add         (QString key, class QDate value);
-    void                    add         (QString key, class QDateTime value);
+    void                    add         (const QString &key, const double &value);
+    void                    add         (const QString &key, const QString &value);
+    void                    add         (const QString &key, const int &value);
+    void                    add         (const QString &key, const qint64 &value);
+    void                    add         (const QString &key, const class QDate &value);
+    void                    add         (const QString &key, const class QDateTime &value);
     void                    add         (QString key, class Height);
-    void                    addCriteria (QString key, double value);
-    void                    addCriteria (QString key, QString value);
-    void                    addCriteria (QString key, int value);
-    void                    addCriteria (QString key, class QDate value);
-    void                    addCriteria (QString key, class QDateTime value);
-    void                    addCriteria (QString key, class Height value);
+    void                    addCriteria (const QString &key, const double &value);
+    void                    addCriteria (const QString &key, const QString &value);
+    void                    addCriteria (const QString &key, const int &value);
+    void                    addCriteria (const QString &key, const class QDate &value);
+    void                    addCriteria (const QString &key, const class QDateTime &value);
+    void                    addCriteria (const QString &key, const class Height &value);
 
     /// using pqxx class
     std::string             toPqxxInsert    (QString table, bool verbose=true);
@@ -46,11 +46,11 @@ public:
     QSqlQuery               toQSqlSelect    (QString table="");
     QSqlQuery               toQSqlQuery     (QString table="");
 #endif
-    static QString          sqlSafe         (int i);
-    static QString          sqlSafe         (double d);
-    static QString          sqlSafe         (QString s);
-    static QString          sqlSafe         (class QDate);
-    static QString          sqlSafe         (class QDateTime d);
+    static QString          sqlSafe (const int i) ;
+    static QString          sqlSafe (const double d) ;
+    static QString          sqlSafe (const QString s) ;
+    static QString          sqlSafe (const class QDate) ;
+    static QString          sqlSafe (const class QDateTime d) ;
 
 private:
     QString                 buildWhereClause();
