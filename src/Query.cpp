@@ -322,9 +322,9 @@ void Query::add(const QString &key, const double &value){
 }
 /** \brief Add a QString Value to the map of Query Parameters */
 void Query::add(const QString &key, const QString &value){
-    if (key.contains("filename", Qt::CaseInsensitive)){
-        qDebug("Adding Filename to query: %s", qPrintable(value));
-    }
+//    if (key.contains("filename", Qt::CaseInsensitive)){
+//        qDebug("Adding Filename to query: %s", qPrintable(value));
+//    }
     if (!value.isNull() && !value.isEmpty()){
             if (value != "/."){
                 if (!value.contains(QRegularExpression("[\\<\\>]"))){
@@ -336,9 +336,9 @@ void Query::add(const QString &key, const QString &value){
                             entry.remove(QRegularExpression("\\\'$"));
                         entry.replace('\'', "\'\'");
                         QString newEntry = QString("\'%1\'").arg(entry);
-                        if (key.contains("filename", Qt::CaseInsensitive)){
-                            qDebug("Formatted Value: %s", qPrintable(newEntry));
-                        }
+//                        if (key.contains("filename", Qt::CaseInsensitive)){
+//                            qDebug("Formatted Value: %s", qPrintable(newEntry));
+//                        }
                         if (newEntry != "''"){
                             data.insert(key, newEntry);
                         }
@@ -346,9 +346,9 @@ void Query::add(const QString &key, const QString &value){
                 }
             }
     }
-    if (key.contains("filename", Qt::CaseInsensitive)){
-        qDebug("\n");
-    }
+//    if (key.contains("filename", Qt::CaseInsensitive)){
+//        qDebug("\n");
+//    }
 }
 
 
